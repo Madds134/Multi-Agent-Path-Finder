@@ -147,18 +147,18 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints):
                 closed_list[key] = child
                 push_node(open_list, child)
 
-            # Wait at the current node, stay in place for one step
+            # Wait dictionary for the current node, stay in place for one step
             wait = {
-                'loc' : curr['loc'],
-                'g_val' : curr['g_val'] + 1,
-                'h_val' : h_values[curr['loc']],
-                't' : curr['t'] + 1,
-                'parent' : curr
+                'loc' : curr['loc'],                # Keep the same cell
+                'g_val' : curr['g_val'] + 1,        # Increment the cost by 1
+                'h_val' : h_values[curr['loc']],    # Keep the same heuristic
+                't' : curr['t'] + 1,                # Advance the timestamp by 1
+                'parent' : curr                     # Maintain t the backpointer
             }
-            wait_key = (wait['loc'], wait['t'])
-            if wait_key in closed_list:
+            wait_key = (wait['loc'], wait['t']) # Create tuple of (loc, t) for wait
+            if wait_key in closed_list:         
                 if compare_nodes(wait, closed_list[wait_key]):
-                    closed_list[wkey] = wait
+                    closed_list[wait_key] = wait
                     push_node(open_list, wait)
             else:
                 closed_list[wait_key] = wait
