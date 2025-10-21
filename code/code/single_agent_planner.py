@@ -1,4 +1,5 @@
 import heapq
+from collections import defaultdict
 
 def move(loc, dir):
     directions = [(0, -1), (1, 0), (0, 1), (-1, 0)]
@@ -54,7 +55,21 @@ def build_constraint_table(constraints, agent):
     #               for a more efficient constraint violation check in the 
     #               is_constrained function.
 
-    pass
+    # TASK 1.2 Handling Negative Vertex Constraints
+    table = defaultdict(list)
+
+    if constraints is None:
+        return table
+
+    for c in constraints:
+        if c['agent'] != agent: # Only store the constraints that belong to the specific agent
+            continue
+        timestep = c['timestep']
+        locs = c['loc']  
+        # Each constriant's 'loc' field is a list of forbidden cells
+        for loc in locs:
+            table[timestep].append(tuple(loc))
+    return table
 
 
 def get_location(path, time):
@@ -82,8 +97,12 @@ def is_constrained(curr_loc, next_loc, next_time, constraint_table):
     #               any given constraint. For efficiency the constraints are indexed in a constraint_table
     #               by time step, see build_constraint_table.
 
-    pass
-
+    # Returns true if moving from the current location to the next location at the next time stamp violates a constraint
+    
+    next_loc = tuple(next_loc) # Convert to tuple as curr_loc will be a list
+    # Get all the forbidden cells at this timestep
+    forbidden_cells = constraint_table.get(next_time, [])
+    return next_loc in forbidden_cells
 
 def push_node(open_list, node):
     heapq.heappush(open_list, (node['g_val'] + node['h_val'], node['h_val'], node['loc'], node))
@@ -106,16 +125,19 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints):
         agent       - the agent that is being re-planned
         constraints - constraints defining where robot should or cannot go at each timestep
     """
-
-    ##############################
-    # Task 1.1: Extend the A* search to search in the space-time domain
-    #           rather than space domain, only.
+    ####### TASK 1.2
+    constraint_table = build_constraint_table(constraints, agent) # Get the constraint table
 
     open_list = []
     closed_list = dict()
     earliest_goal_timestep = 0 
     h_value = h_values[start_loc]
     root = {'loc': start_loc, 'g_val': 0, 'h_val': h_value, 't' : 0, 'parent': None}
+
+    # If the start is forbidden at t = 0, there is no feasible plan
+    if is_constrained(root['loc'], root['loc'], 0, constraint_table):
+        return None
+    
     push_node(open_list, root)
     closed_list[(root['loc']), (root['t'])] = root # The key is (loc, t)
 
@@ -136,6 +158,10 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints):
                     'h_val': h_values[child_loc],
                     't' : curr['t'] + 1,
                     'parent': curr}
+
+            # Prune by the vertex constraint at the next timestep
+            if is_constrained(curr['loc'], child['loc'], child['t'], constraint_table):
+                continue
             key = (child['loc'], child['t'])
 
             if key in closed_list:
@@ -147,7 +173,7 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints):
                 closed_list[key] = child
                 push_node(open_list, child)
 
-            # Wait dictionary for the current node, stay in place for one step
+            # Wait dictionary for new node, stay in place for one step
             wait = {
                 'loc' : curr['loc'],                # Keep the same cell
                 'g_val' : curr['g_val'] + 1,        # Increment the cost by 1
@@ -155,13 +181,14 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints):
                 't' : curr['t'] + 1,                # Advance the timestamp by 1
                 'parent' : curr                     # Maintain t the backpointer
             }
-            wait_key = (wait['loc'], wait['t']) # Create tuple of (loc, t) for wait
-            if wait_key in closed_list:         
-                if compare_nodes(wait, closed_list[wait_key]):
+            if not is_constrained(curr['loc'], wait['loc'], wait['t'], constraint_table):
+                wait_key = (wait['loc'], wait['t']) # Create tuple of (loc, t) for wait node
+                if wait_key in closed_list:         
+                    if compare_nodes(wait, closed_list[wait_key]): # If new path is better than old
+                        closed_list[wait_key] = wait
+                        push_node(open_list, wait) # Since better, reconsider for expansion
+                else:
                     closed_list[wait_key] = wait
                     push_node(open_list, wait)
-            else:
-                closed_list[wait_key] = wait
-                push_node(open_list, wait)
 
     return None  # Failed to find solutions
