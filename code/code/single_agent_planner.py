@@ -54,21 +54,22 @@ def build_constraint_table(constraints, agent):
     #               the given agent for each time step. The table can be used
     #               for a more efficient constraint violation check in the 
     #               is_constrained function.
-
-    # TASK 1.2 Handling Negative Vertex Constraints
-    table = defaultdict(list)
-
+    table = defaultdict(lambda: {'vertex' : set(), 'edge' : set()})
     if constraints is None:
         return table
-
     for c in constraints:
         if c['agent'] != agent: # Only store the constraints that belong to the specific agent
             continue
         timestep = c['timestep']
-        locs = c['loc']  
-        # Each constriant's 'loc' field is a list of forbidden cells
-        for loc in locs:
-            table[timestep].append(tuple(loc))
+        loc = c['loc']  
+        # Vertex Constraint, when loc is a single cell list 
+        if len(loc) == 1:
+            table[timestep]['vertex'].add(loc[0])
+        # Edge Constraint, when loc is a two cell list
+        elif len(loc) == 2:
+            node_from = loc[0]
+            node_to = loc[1]
+            table[timestep]['edge'].add((node_from, node_to))
     return table
 
 
@@ -92,17 +93,29 @@ def get_path(goal_node):
 
 
 def is_constrained(curr_loc, next_loc, next_time, constraint_table):
-    ##############################
-    # Task 1.2/1.3: Check if a move from curr_loc to next_loc at time step next_time violates
-    #               any given constraint. For efficiency the constraints are indexed in a constraint_table
-    #               by time step, see build_constraint_table.
+    """
+    Checks if a move from the current location to the next location violates a vertex or edge constraint
 
-    # Returns true if moving from the current location to the next location at the next time stamp violates a constraint
-    
-    next_loc = tuple(next_loc) # Convert to tuple as curr_loc will be a list
+    Args:
+        curr_loc (tuple[int, int]): Current location
+        next_loc (tuple[int, int]): Next location
+        next_time (int): Timestep after the move
+        constraint_table (dict): Table of vertex/edge constraints
+
+    Returns:
+        bool : True if move violates a constrant, else False
+    """
     # Get all the forbidden cells at this timestep
-    forbidden_cells = constraint_table.get(next_time, [])
-    return next_loc in forbidden_cells
+    forbidden_entry = constraint_table.get(next_time)
+    if forbidden_entry is None:
+        return False
+    # Vertex Constraint
+    if next_loc in forbidden_entry['vertex']:
+        return True
+    # Edge constraint
+    if (curr_loc, next_loc) in forbidden_entry['edge']:
+        return True
+    return False
 
 def push_node(open_list, node):
     heapq.heappush(open_list, (node['g_val'] + node['h_val'], node['h_val'], node['loc'], node))
