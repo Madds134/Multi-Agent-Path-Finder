@@ -68,6 +68,24 @@ class PrioritizedPlanningSolver(object):
                         'loc' : [loc],
                         'timestep' : t
                     })
+        # Reserve the edges
+            for t in range(len(path) - 1):
+                u = path[t]
+                v = path[t + 1]
+                edge_timestep = t + 1 # The edge has been taken when reaches v at t+1
+
+                for j in range(i + 1, self.num_of_agents):
+                    constraints.append({
+                        'agent': j,
+                        'loc' : [u, v], # directed edge constraint
+                        'timestep': edge_timestep
+                    })
+                    constraints.append({
+                        'agent': j,
+                        'loc' : [v, u], # directed edge constraint in reverse
+                        'timestep': edge_timestep
+                    })
+
         # Keep the goal cell reserved after agent i arrives
             goal_loc = path[-1]
             buffer = len(path) + 100
