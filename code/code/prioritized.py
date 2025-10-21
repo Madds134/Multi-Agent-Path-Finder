@@ -30,22 +30,22 @@ class PrioritizedPlanningSolver(object):
         result = []
         constraints = []
 
-        # TASK 1.2 Negative vertex constraint
-        constraints.append({
-            'agent' : 1,
-            'loc' : [(1, 1)],
-            'timestep': 1
-        })
-        constraints.append({
-            'agent' : 1,
-            'loc' : [(1, 2), (1,1)],
-            'timestep': 2
-        })
-        constraints.append({
-            'agent' : 1,
-            'loc' : [(1, 2)],
-            'timestep': 2
-        })
+        # TASK 1.5 Negative vertex constraint
+        # constraints.append({
+        #     'agent' : 1,
+        #     'loc' : [(1, 1)],
+        #     'timestep': 1
+        # })
+        # constraints.append({
+        #     'agent' : 1,
+        #     'loc' : [(1, 2), (1,1)],
+        #     'timestep': 2
+        # })
+        # constraints.append({
+        #     'agent' : 1,
+        #     'loc' : [(1, 2)],
+        #     'timestep': 2
+        # })
         for i in range(self.num_of_agents):  # Find path for each agent
             path = a_star(self.my_map, self.starts[i], self.goals[i], self.heuristics[i],
                           i, constraints)
@@ -59,9 +59,27 @@ class PrioritizedPlanningSolver(object):
             #            * path contains the solution path of the current (i'th) agent, e.g., [(1,1),(1,2),(1,3)]
             #            * self.num_of_agents has the number of total agents
             #            * constraints: array of constraints to consider for future A* searches
-
-
             ##############################
+        # Iterate per time step, apply constraint to later agents
+            for t, loc in enumerate(path):
+                for j in range(i + 1, self.num_of_agents):
+                    constraints.append({
+                        'agent' : j,
+                        'loc' : [loc],
+                        'timestep' : t
+                    })
+        # Keep the goal cell reserved after agent i arrives
+            goal_loc = path[-1]
+            buffer = len(path) + 100
+            for t in range(len(path), buffer):
+                for j in range(i + 1, self.num_of_agents):
+                    constraints.append({
+                        'agent' : j,
+                        'loc' : [goal_loc],
+                        'timestep' : t
+                    })
+
+
 
         self.CPU_time = timer.time() - start_time
 
