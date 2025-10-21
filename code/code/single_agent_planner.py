@@ -130,6 +130,11 @@ def compare_nodes(n1, n2):
     """Return true is n1 is better than n2."""
     return n1['g_val'] + n1['h_val'] < n2['g_val'] + n2['h_val']
 
+def get_earliest_goal_timestep(constraint_table):
+    """
+    Return the maximum time step that appear in the constraint table
+    """
+    return max(constraint_table.keys()) if len(constraint_table) > 0 else 0
 
 def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints):
     """ my_map      - binary obstacle map
@@ -138,12 +143,11 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints):
         agent       - the agent that is being re-planned
         constraints - constraints defining where robot should or cannot go at each timestep
     """
-    ####### TASK 1.2
     constraint_table = build_constraint_table(constraints, agent) # Get the constraint table
-
+    
     open_list = []
     closed_list = dict()
-    earliest_goal_timestep = 0 
+    earliest_goal_timestep = get_earliest_goal_timestep(constraint_table)
     h_value = h_values[start_loc]
     root = {'loc': start_loc, 'g_val': 0, 'h_val': h_value, 't' : 0, 'parent': None}
 
@@ -159,8 +163,10 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints):
 
         #############################
         # Task 1.4: Adjust the goal test condition to handle goal constraints
-        if curr['loc'] == goal_loc:
+        if curr['loc'] == goal_loc and curr['t'] >= earliest_goal_timestep \
+            and not is_constrained(curr['loc'], curr['loc'], curr['t'], constraint_table):
             return get_path(curr)
+            
         
         for dir in range(4):
             child_loc = move(curr['loc'], dir)
@@ -204,4 +210,4 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints):
                     closed_list[wait_key] = wait
                     push_node(open_list, wait)
 
-    return None  # Failed to find solutions
+    return None  # Failed to find solution
