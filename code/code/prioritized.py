@@ -46,9 +46,21 @@ class PrioritizedPlanningSolver(object):
         #     'loc' : [(1, 2)],
         #     'timestep': 2
         # })
+        # Count the number of free cells
+        free_cells = 0
+        for row in self.my_map:
+            for cell in row:
+                if cell is False:
+                    free_cells += 1
+        lb_sum = 0
+        for i in range(self.num_of_agents):
+            # Sum of lowers bounds from start to goal ignoring other agents
+            lb_sum += self.heuristics[i][self.starts[i]]
+        H_GLOBAL = int(lb_sum + free_cells)
+        
         for i in range(self.num_of_agents):  # Find path for each agent
             path = a_star(self.my_map, self.starts[i], self.goals[i], self.heuristics[i],
-                          i, constraints)
+                          i, constraints, max_timestep=H_GLOBAL)
             if path is None:
                 raise BaseException('No solutions')
             result.append(path)
@@ -88,8 +100,8 @@ class PrioritizedPlanningSolver(object):
 
         # Keep the goal cell reserved after agent i arrives
             goal_loc = path[-1]
-            buffer = len(path) + 100
-            for t in range(len(path), buffer):
+            arrival_timestep = len(path) - 1
+            for t in range(arrival_timestep + 1, H_GLOBAL + 1):
                 for j in range(i + 1, self.num_of_agents):
                     constraints.append({
                         'agent' : j,

@@ -137,7 +137,7 @@ def get_earliest_goal_timestep(constraint_table):
     """
     return max(constraint_table.keys()) if len(constraint_table) > 0 else 0
 
-def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints):
+def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints, max_timestep=None):
     """ my_map      - binary obstacle map
         start_loc   - start position
         goal_loc    - goal position
@@ -145,7 +145,6 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints):
         constraints - constraints defining where robot should or cannot go at each timestep
     """
     constraint_table = build_constraint_table(constraints, agent) # Get the constraint table
-    
     open_list = []
     closed_list = dict()
     earliest_goal_timestep = get_earliest_goal_timestep(constraint_table)
@@ -167,8 +166,13 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints):
         if curr['loc'] == goal_loc and curr['t'] >= earliest_goal_timestep \
             and not is_constrained(curr['loc'], curr['loc'], curr['t'], constraint_table):
             return get_path(curr)
-            
         
+        # Generate the successors
+        next_timestep = curr['t'] + 1
+        # Prune the successors with timestep larger than the max
+        if max_timestep is not None and next_timestep > max_timestep:
+            continue
+
         for dir in range(4):
             child_loc = move(curr['loc'], dir)
             r,c = child_loc
@@ -196,8 +200,7 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints):
             else:
                 closed_list[key] = child
                 push_node(open_list, child)
-
-            # Wait dictionary for new node, stay in place for one step
+                    # Wait dictionary for new node, stay in place for one step
             wait = {
                 'loc' : curr['loc'],                # Keep the same cell
                 'g_val' : curr['g_val'] + 1,        # Increment the cost by 1
@@ -214,5 +217,4 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints):
                 else:
                     closed_list[wait_key] = wait
                     push_node(open_list, wait)
-
     return None  # Failed to find solution
