@@ -147,7 +147,12 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints, max_timest
     constraint_table = build_constraint_table(constraints, agent) # Get the constraint table
     open_list = []
     closed_list = dict()
-    earliest_goal_timestep = get_earliest_goal_timestep(constraint_table)
+    earliest_goal_timestep = 0
+    for t, value in constraint_table.items():
+        if goal_loc in value['vertex']:
+            # cannot be at goal at time t, so earliest legal arrival is after t
+            earliest_goal_timestep = max(earliest_goal_timestep, t + 1)
+
     h_value = h_values[start_loc]
     root = {'loc': start_loc, 'g_val': 0, 'h_val': h_value, 't' : 0, 'parent': None}
 
@@ -166,6 +171,10 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints, max_timest
         if curr['loc'] == goal_loc and curr['t'] >= earliest_goal_timestep \
             and not is_constrained(curr['loc'], curr['loc'], curr['t'], constraint_table):
             return get_path(curr)
+        
+        # Only expand successors if not already at the goal
+        #if curr['loc'] == goal_loc:
+        #    continue
         
         # Generate the successors
         next_timestep = curr['t'] + 1
