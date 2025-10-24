@@ -11,8 +11,20 @@ def detect_collision(path1, path2):
     #           A vertex collision occurs if both robots occupy the same location at the same timestep
     #           An edge collision occurs if the robots swap their location at the same timestep.
     #           You should use "get_location(path, t)" to get the location of a robot at time t.
-
-    pass
+    timesteps = max(len(path1), len(path2))
+    # Vertex collision at each time step
+    for t in range(timesteps):
+        location1 = get_location(path1, t)
+        location2 = get_location(path2, t)
+        if location1 == location2:
+            return {'loc': [location1], 'timestep': t}
+    # Check edge collisions from t - 1 to t
+        if t > 0:
+            prev_location1 = get_location(path1, t - 1)
+            prev_location2 = get_location(path2, t - 1)
+            if prev_location1 == location2 and prev_location2 == location1:
+                return {'loc': [prev_location1, location1], 'timestep': t}
+    return None
 
 
 def detect_collisions(paths):
@@ -21,8 +33,14 @@ def detect_collisions(paths):
     #           A collision can be represented as dictionary that contains the id of the two robots, the vertex or edge
     #           causing the collision, and the timestep at which the collision occurred.
     #           You should use your detect_collision function to find a collision between two robots.
-
-    pass
+    collisions = []
+    n = len(paths)
+    for i in range(n):
+        for j in range(i + 1, n):
+            c = detect_collision(paths[i], paths[j])
+            if c is not None:
+                collisions.append({'a1': i, 'a2': j, 'loc': c['loc'], 'timestep': c['timestep']})
+    return collisions
 
 
 def standard_splitting(collision):
@@ -93,7 +111,6 @@ class CBSSolver(object):
 
         disjoint    - use disjoint splitting or not
         """
-
         self.start_time = timer.time()
 
         # Generate the root node
