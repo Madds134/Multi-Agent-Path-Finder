@@ -48,6 +48,31 @@ def compute_heuristics(my_map, goal):
         h_values[loc] = node['cost']
     return h_values
 
+def violates_negative(curr_loc, next_loc, next_time, constraint_table):
+    """
+    Return True if the move from curr_loc to next_loc at timestep next_time violates any negative constraints
+    """
+    entry = constraint_table.get(next_time)
+    if entry is None:
+        return False
+    if next_loc in entry['n_vertex']:
+        return True 
+    if (curr_loc, next_loc) in entry['n_edge']:
+        return True
+    return False
+
+def violates_positive(curr_loc, next_loc, next_time, constraint_table):
+    """
+    Return true if the move from curr_loc to next_loc at timestep next_time violates any positive constraints
+    """
+    entry = constraint_table.get(next_time)
+    if entry is None:
+        return False
+    if next_loc in entry['p_vertex']:
+        return True
+    if (curr_loc, next_loc) in entry['p_edge']:
+        return True
+    return False
 
 def build_constraint_table(constraints, agent):
     ##############################
@@ -55,7 +80,8 @@ def build_constraint_table(constraints, agent):
     #               the given agent for each time step. The table can be used
     #               for a more efficient constraint violation check in the 
     #               is_constrained function.
-    table = defaultdict(lambda: {'vertex' : set(), 'edge' : set()})
+    table = defaultdict(lambda: {'n_vertex' : set(), 'n_edge' : set(),
+                                'p_vertex' : set(), 'p_edge' : set()})
     if constraints is None:
         return table
     for c in constraints:
@@ -63,14 +89,21 @@ def build_constraint_table(constraints, agent):
             continue
         timestep = c['timestep']
         loc = c['loc']  
+        is_positive = bool(c.get('positive', False))
         # Vertex Constraint, when loc is a single cell list 
         if len(loc) == 1:
-            table[timestep]['vertex'].add(loc[0])
+            if is_positive:
+                table[timestep]['p_vertex'].add(loc[0])
+            else:
+                table[timestep]['n_vertex'].add(loc[0])
         # Edge Constraint, when loc is a two cell list
         elif len(loc) == 2:
             node_from = loc[0]
             node_to = loc[1]
-            table[timestep]['edge'].add((node_from, node_to))
+            if is_positive:
+                table[timestep]['p_edge'].add((node_from, node_to))
+            else:
+                table[timestep]['n_edge'].add((node_from, node_to))
     return table
 
 
@@ -106,17 +139,8 @@ def is_constrained(curr_loc, next_loc, next_time, constraint_table):
     Returns:
         bool : True if move violates a constrant, else False
     """
-    # Get all the forbidden cells at this timestep
-    forbidden_entry = constraint_table.get(next_time)
-    if forbidden_entry is None:
-        return False
-    # Vertex Constraint
-    if next_loc in forbidden_entry['vertex']:
-        return True
-    # Edge constraint
-    if (curr_loc, next_loc) in forbidden_entry['edge']:
-        return True
-    return False
+    return violates_negative(curr_loc, next_loc, next_time, constraint_table) or \
+           violates_positive(curr_loc, next_loc, next_time, constraint_table)
 
 def push_node(open_list, node):
     heapq.heappush(open_list, (node['g_val'] + node['h_val'], node['h_val'], node['loc'], node))
@@ -155,9 +179,10 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints, max_timest
     constraint_table = build_constraint_table(constraints, agent) # Get the constraint table
     open_list = []
     closed_list = dict()
+    # Earliest goal timestep due to negative vertex constraints on the goal
     earliest_goal_timestep = 0
     for t, value in constraint_table.items():
-        if goal_loc in value['vertex']:
+        if goal_loc in value['n_vertex']:
             # cannot be at goal at time t, so earliest legal arrival is after t
             earliest_goal_timestep = max(earliest_goal_timestep, t + 1)
 
@@ -219,21 +244,21 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints, max_timest
             else:
                 closed_list[key] = child
                 push_node(open_list, child)
-                    # Wait dictionary for new node, stay in place for one step
-            wait = {
-                'loc' : curr['loc'],                # Keep the same cell
-                'g_val' : curr['g_val'] + 1,        # Increment the cost by 1
-                'h_val' : h_values[curr['loc']],    # Keep the same heuristic
-                't' : curr['t'] + 1,                # Advance the timestamp by 1
-                'parent' : curr                     # Maintain t the backpointer
-            }
-            if not is_constrained(curr['loc'], wait['loc'], wait['t'], constraint_table):
-                wait_key = (wait['loc'], wait['t']) # Create tuple of (loc, t) for wait node
-                if wait_key in closed_list:         
-                    if compare_nodes(wait, closed_list[wait_key]): # If new path is better than old
-                        closed_list[wait_key] = wait
-                        push_node(open_list, wait) # Since better, reconsider for expansion
-                else:
+        # Wait dictionary for new node, stay in place for one step
+        wait = {
+            'loc' : curr['loc'],                # Keep the same cell
+            'g_val' : curr['g_val'] + 1,        # Increment the cost by 1
+            'h_val' : h_values[curr['loc']],    # Keep the same heuristic
+            't' : curr['t'] + 1,                # Advance the timestamp by 1
+            'parent' : curr                     # Maintain t the backpointer
+        }
+        if not is_constrained(curr['loc'], wait['loc'], wait['t'], constraint_table):
+            wait_key = (wait['loc'], wait['t']) # Create tuple of (loc, t) for wait node
+            if wait_key in closed_list:         
+                if compare_nodes(wait, closed_list[wait_key]): # If new path is better than old
                     closed_list[wait_key] = wait
-                    push_node(open_list, wait)
+                    push_node(open_list, wait) # Since better, reconsider for expansion
+            else:
+                closed_list[wait_key] = wait
+                push_node(open_list, wait)
     return None  # Failed to find solution
