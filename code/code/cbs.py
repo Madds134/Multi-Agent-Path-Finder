@@ -151,7 +151,7 @@ class CBSSolver(object):
 
         # Task 3.2: Testing
         for collision in root['collisions']:
-            print(standard_splitting(collision))
+           print(standard_splitting(collision))
 
         ##############################
         # Task 3.3: High-Level Search
@@ -161,7 +161,38 @@ class CBSSolver(object):
         #             3. Otherwise, choose the first collision and convert to a list of constraints (using your
         #                standard_splitting function). Add a new child node to your open list for each constraint
         #           Ensure to create a copy of any objects that your child nodes might inherit
-
+        expanded = 0
+        while(len(self.open_list)) > 0:
+            P = self.pop_node()
+            expanded += 1
+            print(f"(Expand #{expanded}) cost={P['cost']}  collisions={len(P['collisions'])}")
+        # Test the goal, when no collisions are left
+            if len(P['collisions']) == 0:
+                print(f"Solution found after expanding {expanded} nodes.")
+                self.print_results(P)
+                return P['paths']
+        # Resolve a collision
+            collision = P['collisions'][0]
+            constraints = standard_splitting(collision)
+        # Create child node
+            for constraint in constraints:
+                Q = {'constraints': P['constraints'] + [constraint],
+                 'paths': list(P['paths'])} # Shallow copy
+                agent = constraint['agent']
+            # replan for the constrained agent
+                new_path = a_star(self.my_map, self.starts[agent], self.goals[agent], self.heuristics[agent], agent, Q['constraints']) 
+                if new_path is None:
+                    continue
+            # Update node info
+                Q['paths'][agent] = new_path
+                Q['collisions'] = detect_collisions(Q['paths'])
+                Q['cost'] = get_sum_of_cost(Q['paths'])
+            # Debug print for generated children
+                print(f"-> child: agent {agent}, t={constraint['timestep']}, "
+                     f"cost={Q['cost']}, collisions={len(Q['collisions'])}")
+            # Push the child
+                self.push_node(Q)
+        
         self.print_results(root)
         return root['paths']
 

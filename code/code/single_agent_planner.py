@@ -137,6 +137,14 @@ def get_earliest_goal_timestep(constraint_table):
     """
     return max(constraint_table.keys()) if len(constraint_table) > 0 else 0
 
+def in_bounds(my_map, loc):
+    r,c = loc
+    return (
+        0 <= r < len(my_map) and
+        0 <= c < len(my_map[0]) and
+        my_map[r][c] is False
+    )
+
 def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints, max_timestep=None):
     """ my_map      - binary obstacle map
         start_loc   - start position
@@ -184,7 +192,9 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints, max_timest
 
         for dir in range(4):
             child_loc = move(curr['loc'], dir)
-            r,c = child_loc
+            # Skip invalid cells
+            if not in_bounds(my_map, child_loc):
+                continue
             # For Task 1,5
             # if r < 0 or r >= ROWS or c < 0 or c >= COLS:
                 # continue
