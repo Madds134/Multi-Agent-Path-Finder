@@ -105,13 +105,13 @@ def build_constraint_table(constraints, agent):
                     if table[timestep]['p_vertex'] is None and table[timestep]['p_edge'] is None:
                         table[timestep]['p_edge'] = edge
             else:
-            # Implied negatives for this agent
+            # Implied negatives for this agent because another has a positive
                 if len(loc) == 1:
                     table[timestep]['n_vertex'].add(loc[0])
                 else:
                     table[timestep]['n_edge'].add((loc[0], loc[1]))
                     table[timestep]['n_edge'].add((loc[1], loc[0]))
-                    pass
+                    table[timestep]['n_vertex'].add(loc[1])
         else:
             # Negative constraint for the specificed agent
             if c['agent'] == agent:
@@ -200,7 +200,7 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints, max_timest
         if goal_loc in value['n_vertex']:
             # cannot be at goal at time t, so earliest legal arrival is after t
             earliest_goal_timestep = max(earliest_goal_timestep, t + 1)
-
+    
     h_value = h_values[start_loc]
     root = {'loc': start_loc, 'g_val': 0, 'h_val': h_value, 't' : 0, 'parent': None}
 
@@ -221,8 +221,8 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints, max_timest
             return get_path(curr)
         
         # Only expand successors if not already at the goal
-        if curr['loc'] == goal_loc:
-           continue
+        # if curr['loc'] == goal_loc:
+        #    continue
         
         # Generate the successors
         next_timestep = curr['t'] + 1
@@ -259,6 +259,7 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints, max_timest
             else:
                 closed_list[key] = child
                 push_node(open_list, child)
+
         # Wait dictionary for new node, stay in place for one step
         wait = {
             'loc' : curr['loc'],                # Keep the same cell

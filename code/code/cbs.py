@@ -69,6 +69,39 @@ def standard_splitting(collision):
                 {'agent': a2, 'loc': [v, u], 'timestep': t}]
     return []
 
+# def disjoint_splitting(collision):
+#     ##############################
+#     # Task 4.1: Return a list of constraints to resolve the given collision
+#     #           Disjoint: generate (+/-) for BOTH agents to avoid missing the optimal branch
+#     a1 = collision['a1']
+#     a2 = collision['a2']
+#     loc = collision['loc']
+#     t = collision['timestep']
+
+#     out = []
+
+#     if len(loc) == 1:
+#         # vertex collision at loc[0]
+#         # positive/negative for a1
+#         out.append({'agent': a1, 'loc': loc, 'timestep': t, 'positive': True})
+#         out.append({'agent': a1, 'loc': loc, 'timestep': t, 'positive': False})
+#         # positive/negative for a2
+#         out.append({'agent': a2, 'loc': loc, 'timestep': t, 'positive': True})
+#         out.append({'agent': a2, 'loc': loc, 'timestep': t, 'positive': False})
+#         return out
+
+#     elif len(loc) == 2:
+#         # edge collision: agent a1 does u->v, agent a2 does v->u at time t
+#         u, v = loc[0], loc[1]
+#         # a1 branch (u->v)
+#         out.append({'agent': a1, 'loc': [u, v], 'timestep': t, 'positive': True})
+#         out.append({'agent': a1, 'loc': [u, v], 'timestep': t, 'positive': False})
+#         # a2 branch (v->u)
+#         out.append({'agent': a2, 'loc': [v, u], 'timestep': t, 'positive': True})
+#         out.append({'agent': a2, 'loc': [v, u], 'timestep': t, 'positive': False})
+#         return out
+
+#     return []
 
 def disjoint_splitting(collision):
     ##############################
@@ -98,8 +131,10 @@ def disjoint_splitting(collision):
     elif len(loc) == 2:
         u = loc[0]
         v = loc[1]
-        return [{'agent': p_agent, 'loc': [u, v], 'timestep': t, 'positive': True},
-                {'agent': p_agent, 'loc': [u, v], 'timestep': t, 'positive': False}]
+        edge = [u, v]
+
+        return [{'agent': p_agent, 'loc': edge, 'timestep': t, 'positive': True},
+                {'agent': p_agent, 'loc': edge, 'timestep': t, 'positive': False}]
     return []
 
 def paths_violate_constraint(constraint, paths):
@@ -207,6 +242,11 @@ class CBSSolver(object):
         expanded = 0
         while(len(self.open_list)) > 0:
             P = self.pop_node()
+            # sig = self._sig(P['constraints'])
+            # best = self.hl_closed.get(sig)
+            # if best is not None and best <= P['cost']:
+            #     continue
+            # self.hl_closed[sig] = P['cost']
             expanded += 1
             print(f"(Expand #{expanded}) cost={P['cost']}  collisions={len(P['collisions'])}")
         # Test the goal, when no collisions are left
@@ -238,7 +278,7 @@ class CBSSolver(object):
                     sig = self._sig(Q['constraints'])
                     if sig in self.hl_closed:
                         continue
-                    self.hl_closed = sig
+                    self.hl_closed.add(sig)
                     # Push the child
                     self.push_node(Q)
             else:
@@ -257,7 +297,6 @@ class CBSSolver(object):
                     feasible = True
                     for agent in to_replan:
                         new_path = a_star(self.my_map, self.starts[agent], self.goals[agent], self.heuristics[agent], agent, Q['constraints'])
-
                         if new_path is None:
                             feasible = False
                             break
