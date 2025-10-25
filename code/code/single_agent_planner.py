@@ -68,10 +68,12 @@ def violates_positive(curr_loc, next_loc, next_time, constraint_table):
     entry = constraint_table.get(next_time)
     if entry is None:
         return False
-    if next_loc in entry['p_vertex']:
-        return True
-    if (curr_loc, next_loc) in entry['p_edge']:
-        return True
+    # Must end at the required vertex at this timestep
+    if entry['p_vertex']:
+        return next_loc != entry['p_vertex']
+    # Must take the required edge at this timestep
+    if entry['p_edge']:
+       return (curr_loc, next_loc) != entry['p_edge']
     return False
 
 def build_constraint_table(constraints, agent):
@@ -81,29 +83,42 @@ def build_constraint_table(constraints, agent):
     #               for a more efficient constraint violation check in the 
     #               is_constrained function.
     table = defaultdict(lambda: {'n_vertex' : set(), 'n_edge' : set(),
-                                'p_vertex' : set(), 'p_edge' : set()})
+                                'p_vertex' : None, 'p_edge' : None})
     if constraints is None:
         return table
+
     for c in constraints:
-        if c['agent'] != agent: # Only store the constraints that belong to the specific agent
-            continue
+        #if c['agent'] != agent: # Only store the constraints that belong to the specific agent
+            #continue
         timestep = c['timestep']
         loc = c['loc']  
         is_positive = bool(c.get('positive', False))
-        # Vertex Constraint, when loc is a single cell list 
-        if len(loc) == 1:
-            if is_positive:
-                table[timestep]['p_vertex'].add(loc[0])
+
+        if is_positive:
+            if c['agent'] == agent:
+                # Postive constraint for this agent
+                if len(c['loc']) == 1:
+                    if table[timestep]['p_vertex'] is None and table[timestep]['p_edge'] is None:
+                        table[timestep]['p_vertex'] = loc[0]
+                else:
+                    edge = (loc[0], loc[1])
+                    if table[timestep]['p_vertex'] is None and table[timestep]['p_edge'] is None:
+                        table[timestep]['p_edge'] = edge
             else:
-                table[timestep]['n_vertex'].add(loc[0])
-        # Edge Constraint, when loc is a two cell list
-        elif len(loc) == 2:
-            node_from = loc[0]
-            node_to = loc[1]
-            if is_positive:
-                table[timestep]['p_edge'].add((node_from, node_to))
-            else:
-                table[timestep]['n_edge'].add((node_from, node_to))
+            # Implied negatives for this agent
+                if len(loc) == 1:
+                    table[timestep]['n_vertex'].add(loc[0])
+                else:
+                    table[timestep]['n_edge'].add((loc[0], loc[1]))
+                    table[timestep]['n_edge'].add((loc[1], loc[0]))
+                    pass
+        else:
+            # Negative constraint for the specificed agent
+            if c['agent'] == agent:
+                if len(loc) == 1:
+                    table[timestep]['n_vertex'].add(loc[0])
+                else:
+                    table[timestep]['n_edge'].add((loc[0], loc[1]))
     return table
 
 
@@ -139,8 +154,8 @@ def is_constrained(curr_loc, next_loc, next_time, constraint_table):
     Returns:
         bool : True if move violates a constrant, else False
     """
-    return violates_negative(curr_loc, next_loc, next_time, constraint_table) or \
-           violates_positive(curr_loc, next_loc, next_time, constraint_table)
+    return violates_positive(curr_loc, next_loc, next_time, constraint_table) or \
+           violates_negative(curr_loc, next_loc, next_time, constraint_table)
 
 def push_node(open_list, node):
     heapq.heappush(open_list, (node['g_val'] + node['h_val'], node['h_val'], node['loc'], node))
@@ -206,8 +221,8 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints, max_timest
             return get_path(curr)
         
         # Only expand successors if not already at the goal
-        #if curr['loc'] == goal_loc:
-        #    continue
+        if curr['loc'] == goal_loc:
+           continue
         
         # Generate the successors
         next_timestep = curr['t'] + 1

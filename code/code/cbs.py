@@ -1,6 +1,7 @@
 import time as timer
 import heapq
 import random
+import random
 from single_agent_planner import compute_heuristics, a_star, get_location, get_sum_of_cost
 
 
@@ -83,26 +84,40 @@ def disjoint_splitting(collision):
     a2 = collision['a2']
     loc = collision['loc']
     t = collision['timestep']
-
+    #random.seed(1)
     # Randomly choose which agent gets positive constraint
     if random.randint(0,1) == 0:
         p_agent = a1
-        n_agent = a2
     else:
         p_agent = a2
-        n_agent = a1
     # Vertex collisions
     if len(loc) == 1:
         return [{'agent': p_agent, 'loc': loc, 'timestep': t, 'positive': True},
-                {'agent': n_agent, 'loc': loc, 'timestep': t, 'positive': False}]
+                {'agent': p_agent, 'loc': loc, 'timestep': t, 'positive': False}]
     # Edge directed
     elif len(loc) == 2:
         u = loc[0]
-        y = loc[1]
-        return [{'agent': p_agent, 'loc': loc, 'timestep': t, 'positive': True},
-                {'agent': n_agent, 'loc': loc, 'timestep': t, 'positive': False}]
+        v = loc[1]
+        return [{'agent': p_agent, 'loc': [u, v], 'timestep': t, 'positive': True},
+                {'agent': p_agent, 'loc': [u, v], 'timestep': t, 'positive': False}]
     return []
 
+def paths_violate_constraint(constraint, paths):
+    assert constraint['positive'] is True
+    rst = []
+    for i in range(len(paths)):
+        if i == constraint['agent']:
+            continue
+        curr = get_location(paths[i], constraint['timestep'])
+        prev = get_location(paths[i], constraint['timestep'] - 1)
+        if len(constraint['loc']) == 1:  # vertex constraint
+            if constraint['loc'][0] == curr:
+                rst.append(i)
+        else:  # edge constraint
+            if constraint['loc'][0] == prev or constraint['loc'][1] == curr \
+                    or constraint['loc'] == [curr, prev]:
+                rst.append(i)
+    return rst
 
 class CBSSolver(object):
     """The high-level search of CBS."""
@@ -121,13 +136,20 @@ class CBSSolver(object):
         self.num_of_generated = 0
         self.num_of_expanded = 0
         self.CPU_time = 0
+        self.hl_closed = set()
 
-        self.open_list = []
-
+        self.open_list = [] 
         # compute heuristics for the low-level search
         self.heuristics = []
         for goal in self.goals:
             self.heuristics.append(compute_heuristics(my_map, goal))
+    def _sig(self, constraints):
+        def norm(c):
+            return(c['agent'], c['timestep'], tuple(c['loc']), bool(c.get('positive', False)))
+        return tuple(sorted(norm(c) for c in constraints))
+
+    def norm_c(self, c):
+        return(c['agent'], c['timestep'], tuple(c['loc']), bool(c.get('positive', False)))
 
     def push_node(self, node):
         heapq.heappush(self.open_list, (node['cost'], len(node['collisions']), self.num_of_generated, node))
@@ -194,26 +216,69 @@ class CBSSolver(object):
                 return P['paths']
         # Resolve a collision
             collision = P['collisions'][0]
-            constraints = standard_splitting(collision)
-        # Create child node
-            for constraint in constraints:
-                Q = {'constraints': P['constraints'] + [constraint],
-                 'paths': list(P['paths'])} # Shallow copy
-                agent = constraint['agent']
-            # replan for the constrained agent
-                new_path = a_star(self.my_map, self.starts[agent], self.goals[agent], self.heuristics[agent], agent, Q['constraints']) 
-                if new_path is None:
-                    continue
-            # Update node info
-                Q['paths'][agent] = new_path
-                Q['collisions'] = detect_collisions(Q['paths'])
-                Q['cost'] = get_sum_of_cost(Q['paths'])
-            # Debug print for generated children
-                print(f"-> child: agent {agent}, t={constraint['timestep']}, "
-                     f"cost={Q['cost']}, collisions={len(Q['collisions'])}")
-            # Push the child
-                self.push_node(Q)
-        
+            if not disjoint:
+                print("Enter standard splitting")
+                constraints = standard_splitting(collision)
+                # Create child node
+                for constraint in constraints:
+                    Q = {'constraints': P['constraints'] + [constraint],
+                     'paths': list(P['paths'])} # Shallow copy
+                    agent = constraint['agent']
+                    # replan for the constrained agent
+                    new_path = a_star(self.my_map, self.starts[agent], self.goals[agent], self.heuristics[agent], agent, Q['constraints']) 
+                    if new_path is None:
+                        continue
+                    # Update node info
+                    Q['paths'][agent] = new_path
+                    Q['collisions'] = detect_collisions(Q['paths'])
+                    Q['cost'] = get_sum_of_cost(Q['paths'])
+                    # Debug print for generated children
+                    print(f"-> child: agent {agent}, t={constraint['timestep']}, "
+                        f"cost={Q['cost']}, collisions={len(Q['collisions'])}")
+                    sig = self._sig(Q['constraints'])
+                    if sig in self.hl_closed:
+                        continue
+                    self.hl_closed = sig
+                    # Push the child
+                    self.push_node(Q)
+            else:
+                pos_neg = disjoint_splitting(collision)
+                print("Entered disjoint splitting")
+                for c in pos_neg:
+                    Q = {'constraints': P['constraints'] + [c],
+                        'paths': list(P['paths'])}
+                    if c.get('positive', False):
+                        # Get the violating agents for this reservation and replan
+                        violators = paths_violate_constraint(c, Q['paths'])
+                        to_replan = set(violators) | {c['agent']}
+                    else:
+                        # Negative constraint child, only the constrainted agent needs replanning
+                        to_replan = {c['agent']}
+                    feasible = True
+                    for agent in to_replan:
+                        new_path = a_star(self.my_map, self.starts[agent], self.goals[agent], self.heuristics[agent], agent, Q['constraints'])
+
+                        if new_path is None:
+                            feasible = False
+                            break
+                        Q['paths'][agent] = new_path
+                    # Do not add this child if replan fails
+                    if not feasible:
+                        continue
+
+                    Q['collisions'] = detect_collisions(Q['paths'])
+                    Q['cost'] = get_sum_of_cost(Q['paths'])
+                    # Debug print for generated children
+                    print(f"-> child (DS): +={c.get('positive', False)} agent {c['agent']}, "
+                            f"t={c['timestep']}, replanned={sorted(to_replan)}, "
+                            f"cost={Q['cost']}, collisions={len(Q['collisions'])}")
+                    sig = self._sig(Q['constraints'])
+                    if sig in self.hl_closed:
+                        continue
+                    self.hl_closed.add(sig)
+                    # Push the child
+                    self.push_node(Q)
+                        
         self.print_results(root)
         return root['paths']
 
