@@ -88,8 +88,6 @@ def build_constraint_table(constraints, agent):
         return table
 
     for c in constraints:
-        #if c['agent'] != agent: # Only store the constraints that belong to the specific agent
-            #continue
         timestep = c['timestep']
         loc = c['loc']  
         is_positive = bool(c.get('positive', False))
@@ -109,9 +107,10 @@ def build_constraint_table(constraints, agent):
                 if len(loc) == 1:
                     table[timestep]['n_vertex'].add(loc[0])
                 else:
+                    # Edge collision
                     table[timestep]['n_edge'].add((loc[0], loc[1]))
+                    # Edge collision if swap
                     table[timestep]['n_edge'].add((loc[1], loc[0]))
-                    table[timestep]['n_vertex'].add(loc[1])
         else:
             # Negative constraint for the specificed agent
             if c['agent'] == agent:
@@ -154,8 +153,8 @@ def is_constrained(curr_loc, next_loc, next_time, constraint_table):
     Returns:
         bool : True if move violates a constrant, else False
     """
-    return violates_positive(curr_loc, next_loc, next_time, constraint_table) or \
-           violates_negative(curr_loc, next_loc, next_time, constraint_table)
+    return violates_negative(curr_loc, next_loc, next_time, constraint_table) or \
+           violates_positive(curr_loc, next_loc, next_time, constraint_table)
 
 def push_node(open_list, node):
     heapq.heappush(open_list, (node['g_val'] + node['h_val'], node['h_val'], node['loc'], node))
@@ -172,7 +171,7 @@ def compare_nodes(n1, n2):
 
 def get_earliest_goal_timestep(constraint_table):
     """
-    Return the maximum time step that appear in the constraint table
+    Return the maximum time step that appears in the constraint table
     """
     return max(constraint_table.keys()) if len(constraint_table) > 0 else 0
 
@@ -221,8 +220,8 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints, max_timest
             return get_path(curr)
         
         # Only expand successors if not already at the goal
-        # if curr['loc'] == goal_loc:
-        #    continue
+        if curr['loc'] == goal_loc:
+           continue
         
         # Generate the successors
         next_timestep = curr['t'] + 1

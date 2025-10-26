@@ -69,40 +69,6 @@ def standard_splitting(collision):
                 {'agent': a2, 'loc': [v, u], 'timestep': t}]
     return []
 
-# def disjoint_splitting(collision):
-#     ##############################
-#     # Task 4.1: Return a list of constraints to resolve the given collision
-#     #           Disjoint: generate (+/-) for BOTH agents to avoid missing the optimal branch
-#     a1 = collision['a1']
-#     a2 = collision['a2']
-#     loc = collision['loc']
-#     t = collision['timestep']
-
-#     out = []
-
-#     if len(loc) == 1:
-#         # vertex collision at loc[0]
-#         # positive/negative for a1
-#         out.append({'agent': a1, 'loc': loc, 'timestep': t, 'positive': True})
-#         out.append({'agent': a1, 'loc': loc, 'timestep': t, 'positive': False})
-#         # positive/negative for a2
-#         out.append({'agent': a2, 'loc': loc, 'timestep': t, 'positive': True})
-#         out.append({'agent': a2, 'loc': loc, 'timestep': t, 'positive': False})
-#         return out
-
-#     elif len(loc) == 2:
-#         # edge collision: agent a1 does u->v, agent a2 does v->u at time t
-#         u, v = loc[0], loc[1]
-#         # a1 branch (u->v)
-#         out.append({'agent': a1, 'loc': [u, v], 'timestep': t, 'positive': True})
-#         out.append({'agent': a1, 'loc': [u, v], 'timestep': t, 'positive': False})
-#         # a2 branch (v->u)
-#         out.append({'agent': a2, 'loc': [v, u], 'timestep': t, 'positive': True})
-#         out.append({'agent': a2, 'loc': [v, u], 'timestep': t, 'positive': False})
-#         return out
-
-#     return []
-
 def disjoint_splitting(collision):
     ##############################
     # Task 4.1: Return a list of (two) constraints to resolve the given collision
@@ -117,7 +83,6 @@ def disjoint_splitting(collision):
     a2 = collision['a2']
     loc = collision['loc']
     t = collision['timestep']
-    #random.seed(1)
     # Randomly choose which agent gets positive constraint
     if random.randint(0,1) == 0:
         p_agent = a1
@@ -131,10 +96,13 @@ def disjoint_splitting(collision):
     elif len(loc) == 2:
         u = loc[0]
         v = loc[1]
-        edge = [u, v]
-
+        if p_agent == a1:
+            edge = [u, v]
+        else:
+            edge = [v, u]
         return [{'agent': p_agent, 'loc': edge, 'timestep': t, 'positive': True},
-                {'agent': p_agent, 'loc': edge, 'timestep': t, 'positive': False}]
+                {'agent': p_agent, 'loc': edge, 'timestep': t, 'positive': False}
+                ]
     return []
 
 def paths_violate_constraint(constraint, paths):
@@ -178,13 +146,12 @@ class CBSSolver(object):
         self.heuristics = []
         for goal in self.goals:
             self.heuristics.append(compute_heuristics(my_map, goal))
+            
     def _sig(self, constraints):
+        # Normalize the constraint
         def norm(c):
             return(c['agent'], c['timestep'], tuple(c['loc']), bool(c.get('positive', False)))
         return tuple(sorted(norm(c) for c in constraints))
-
-    def norm_c(self, c):
-        return(c['agent'], c['timestep'], tuple(c['loc']), bool(c.get('positive', False)))
 
     def push_node(self, node):
         heapq.heappush(self.open_list, (node['cost'], len(node['collisions']), self.num_of_generated, node))
@@ -242,11 +209,6 @@ class CBSSolver(object):
         expanded = 0
         while(len(self.open_list)) > 0:
             P = self.pop_node()
-            # sig = self._sig(P['constraints'])
-            # best = self.hl_closed.get(sig)
-            # if best is not None and best <= P['cost']:
-            #     continue
-            # self.hl_closed[sig] = P['cost']
             expanded += 1
             print(f"(Expand #{expanded}) cost={P['cost']}  collisions={len(P['collisions'])}")
         # Test the goal, when no collisions are left
@@ -258,6 +220,8 @@ class CBSSolver(object):
             collision = P['collisions'][0]
             if not disjoint:
                 print("Enter standard splitting")
+                P['collisions'].sort(key=lambda c: c['timestep'])
+                collision = P['collisions'][0]
                 constraints = standard_splitting(collision)
                 # Create child node
                 for constraint in constraints:
@@ -276,15 +240,16 @@ class CBSSolver(object):
                     print(f"-> child: agent {agent}, t={constraint['timestep']}, "
                         f"cost={Q['cost']}, collisions={len(Q['collisions'])}")
                     sig = self._sig(Q['constraints'])
+                    # Set the constraint sigature
                     if sig in self.hl_closed:
                         continue
                     self.hl_closed.add(sig)
                     # Push the child
                     self.push_node(Q)
             else:
-                pos_neg = disjoint_splitting(collision)
+                pos_neg_constraints = disjoint_splitting(collision)
                 print("Entered disjoint splitting")
-                for c in pos_neg:
+                for c in pos_neg_constraints:
                     Q = {'constraints': P['constraints'] + [c],
                         'paths': list(P['paths'])}
                     if c.get('positive', False):
@@ -304,17 +269,12 @@ class CBSSolver(object):
                     # Do not add this child if replan fails
                     if not feasible:
                         continue
-
                     Q['collisions'] = detect_collisions(Q['paths'])
                     Q['cost'] = get_sum_of_cost(Q['paths'])
                     # Debug print for generated children
                     print(f"-> child (DS): +={c.get('positive', False)} agent {c['agent']}, "
                             f"t={c['timestep']}, replanned={sorted(to_replan)}, "
                             f"cost={Q['cost']}, collisions={len(Q['collisions'])}")
-                    sig = self._sig(Q['constraints'])
-                    if sig in self.hl_closed:
-                        continue
-                    self.hl_closed.add(sig)
                     # Push the child
                     self.push_node(Q)
                         
